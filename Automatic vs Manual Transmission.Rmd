@@ -27,6 +27,8 @@ E.g. there might be an interaction variable: driving style which is not covered 
 All Deliverables of the Assignment are met except the segragation of Main Part and Appendix. This attempt has been deliberately given up, as the readability would have suffered too much. 
 In order to increase the readability in addition to the required pure RMD file a HTML version is provided.
 
+http://rpubs.com/schelm56/209524
+
 
 
 # Setting the scene : Environment & Data Exploration
