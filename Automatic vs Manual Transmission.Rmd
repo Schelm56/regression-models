@@ -1,0 +1,566 @@
+---
+title: "Is manual transmission sufficient enough to explain increase of the MPG KPI"
+author: "schelm56"
+date: "Thursday, September 15, 2016"
+output:
+  html_document:
+    keep_md: yes
+    number_sections: yes
+    toc: yes
+---
+
+#####Impact of  multiple car parameters onto the mpg KPI
+Motor Trend is a autombile trend magazine. It is interested in understanding in exploring the relationship between a set of variables and miles per gallon (MPG) (outcome). In this report we will use a dataset from the 1974 Motor Trend US magazine to answer the following questions:
+
+(A) Is an automatic or manual transmission better for MPG?
+
+(B) Quantify the MPG difference between automatic and manual transmissions?
+
+#####Synopsis: Executive Summary
+Based on commonly used statistical technique the given data has been  investigated. Initial simple linear regression model and visual comparison suggest the result that manual transmission is significantly providing better mpg performance.
+However, performing a detailed step by step analysis, the question of auto car and manual car is not anwsered and have to be considered in the context of weight and accelaration speed
+This analysis assumes that the data given is generated under laboratory conditions or in case of field experiment that the environmental conditions are randomly distribution.
+E.g. there might be an interaction variable: driving style which is not covered by the data 
+
+
+###### Note on the deliverables.
+All Deliverables of the Assignment are met except the segragation of Main Part and Appendix. This attempt has been deliberately given up, as the readability would have suffered too much. 
+In order to increase the readability in addition to the required pure RMD file a HTML version is provided.
+
+
+
+# Setting the scene : Environment & Data Exploration
+##Prepare the environment.
+
+### clear workspace
+```{r}
+rm(list=ls())    
+```
+### Set the Working directory
+```{r, echo=FALSE}
+setwd("H:/Coursera/Data Scientist/Reproducible Research/week 4")
+```
+### Load relevant Packages
+```{r, echo=FALSE}
+#install.packages("dplyr")
+library(dplyr)
+library(ggplot2)
+#library(readr)
+require(GGally)
+
+```
+
+### Prepare the input 
+
+```{r}
+input_data<-mtcars
+  
+```
+### Define the table
+```{r}
+tbl_input_data <- tbl_df(input_data)
+
+```
+
+##Exploratory Data Analysis
+### Formal Exploration  of the dataset
+
+```{r}
+?mtcars
+dim(input_data)
+summary(input_data)
+head(input_data)
+glimpse(tbl_input_data)
+
+
+```
+1) Our dataset mtcars contains 32 observations of the following 11 variables.
+.[, 1] mpg Miles/(US) gallon
+.[, 2] cyl Number of cylinders
+.[, 3] disp Displacement (cu.in.)
+.[, 4] hp Gross horsepower
+.[, 5] drat Rear axle ratio
+.[, 6] wt Weight (lb/1000)
+.[, 7] qsec ¼ mile time
+.[, 8] vs V/S
+.[, 9] am Transmission (0 = automatic, 1 = manual)
+.[,10] gear Number of forward gears
+.[,11] carb Number of carburetors
+
+2) Conclusion: No  Data Cleansing is  required in order to properly analyse the data
+
+3) Some Datatransformation is  required in order to properly analyse the data
+4) Bottomline: am has to be interpreted as a binary factor variable. the reference level is the automatic transmission.
+
+### Build the factor variables
+
+```{r}
+
+tbl_input_data$am<-factor(tbl_input_data$am)
+levels(tbl_input_data$am)<-c("automatic", "manual")
+tbl_input_data$gear<-factor(tbl_input_data$gear)
+tbl_input_data$carb<-factor(tbl_input_data$carb)
+
+```
+
+## Statistical Exploratory Data Analysis
+
+In order to check the prerequisites on running a linear regression :plot the dependent variable mpg to check its distribution.
+```{r}
+par(mfrow = c(1, 2))
+```
+##### Histogram with Normal Curve
+```{r}
+x <- input_data$mpg
+h<-hist(x, breaks=10, col="orange", xlab="Miles Per Gallon",
+   main="Histogram of Miles per Gallon")
+
+```
+
+
+#### Kernel Density Plot
+```{r}
+d <- density(input_data$mpg)
+plot(d, xlab = "MPG", main ="Density Plot of MPG")
+```
+
+Bottomline: 
+- the distribution of mpg is approximately normal  
+- no apparent outliers 
+- Prerequisites met
+
+# Main Report
+## Fit multiple models and detail their strategy for model selection
+
+The first step in the investigation is to take a the initial model which is to be built answering the basic question: mpg varies by automatic versus manual transmission?
+
+```{r}
+boxplot(mpg~am, data = tbl_input_data,
+        col = c("dark grey", "light grey"),
+        xlab = "Transmission",
+        ylab = "Miles per Gallon",
+        main = "MPG by Transmission Type")
+
+```
+
+### initial model and its significance
+
+Yes, it is  obvious: there is a  difference in MPG . NOw, its quantity and significance has to be evaluated
+
+
+```{r}
+model0 <- lm(mpg ~ am , data = tbl_input_data)
+mod0<-summary(model0)$coefficients
+mod0
+```
+
+### Interpretation of the relevant coefficients
+
+Let's go through each coefficient: Our model estimates an expected 7.25 increase in  mpg for the increase  of am without considering  the remaining variables at all (excluded from the model).
+Note that  t-test for H0 :  
+am = 0 versus Ha :  
+am ??= 0   significant
+since the p value    of  2.850207e-04 is less  than typical benchmarks (0.05, for example)
+The uncertainty (std. error) of this prediction is identified with 1.76 mpg 
+The intercept is the fitted mpg value when am equal to 0 . In this context it is meaning automatic transmission . 
+
+ 
+Next step is to analyse if this switch from automatic to manual completely explains the variation in 
+mpg or if we have to include other variables into the explanation.
+
+## Prepare the  model building strategy 
+
+### Do not include unnessary predictors in the  model 
+
+For the  model building strategy firstly the unnessary variables have to be excluded.
+
+Thus, this systematic approach is performed : 
+1) all variables are assessed if having impact on MPG with the objective: exclude the unnecessary predictors from the model 
+2) cluster the parameters and provide the respective correlations :
+
+```{r, echo=TRUE}
+ my_plot_control <- function(data, mapping, ...){ 
+ p <- ggplot(data = data, mapping = mapping) 
+ geom_point() 
+ geom_smooth(method=loess, fill="red", color="red", ...) 
+ geom_smooth(method=lm, fill="blue", color="blue", ...) 
+
+ p 
+  } 
+  g = ggpairs(mtcars,columns = 1:11, lower = list(continuous = my_plot_control)) 
+ g
+```
+
+List of the correlations: 
+```{r, echo=TRUE}
+sort(cor(input_data)[1,])
+``` 
+Based on these correlations 2 cluster are built: 
+
+```{r}
+model1 <- lm(mpg ~ . , data = input_data)
+
+summary(model1)$coefficients
+```
+#### Cluster 1 - Negatitve correlation
+
+The mpg decreases with these respective variables increasing while holding the other variables constant:
+
+wt          -3.71530393  1.89441430 -1.9611887 0.06325215
+carb        -0.19941925  0.82875250 -0.2406258 0.81217871
+cyl         -0.11144048  1.04502336 -0.1066392 0.91608738
+hp          -0.02148212  0.02176858 -0.9868407 0.33495531
+
+
+This means: e.g. If wt increases by 1 unit (lb/1000) we expect the mpg will decrease  by 3.7 
+
+### Visual Validation: negative correlation 
+
+```{r, echo=TRUE}
+
+neg_corr <-input_data %>% select(mpg, wt,  carb  ,  cyl   ,hp)
+g = ggpairs(neg_corr,columns = 1:5, lower = list(continuous = my_plot_control)) 
+g
+```
+Conclusion: 
+1)As expected: The variables wt,  carb  ,  cyl   ,hp have a decreasing effect on mpg. 
+2) Interstingly: amongst each other wt,  carb  ,  cyl   ,hp have an increasing effect. e.g. increasing wt  results positively in increasing carb,cyl   ,hp.
+**Action: **
+1) It has to be investigated if there are interdepencies between wt,carb,cyl ,hp .
+2)It has to be investigated if there are confounding effects between these and the automatic transmission
+
+#### Cluster 2 -positive correlation
+The mpg increases with these respective variables increasing - while holding the other variables constant:
+
+am           2.52022689  2.05665055  1.2254035 0.23398971
+qsec         0.82104075  0.73084480  1.1234133 0.27394127
+drat         0.78711097  1.63537307  0.4813036 0.63527790
+gear         0.65541302  1.49325996  0.4389142 0.66520643
+vs           0.31776281  2.10450861  0.1509915 0.88142347
+disp         0.01333524  0.01785750  0.7467585 0.46348865
+
+This means: e.g. If Rear axle ratio increases by 1 unit we expect the mpg will increase  by 0.79 
+Special Focus is to be kept on the aspect which might be relevant for the report question: 
+
+None of these - by itself - are significant. Therefore we need a combination to explain the positiive impact.
+
+### Visual Validation: positive correlation 
+
+```{r}
+ pos_corr <-tbl_input_data %>% select(mpg,am , qsec,drat , gear  , vs,  disp)
+  g = ggpairs(pos_corr,columns = 1:6, lower = list(continuous = my_plot_control)) 
+  g
+
+
+
+```
+
+**Result: **
+
+Conclusion: 
+1)As expected: The variables am , qsec,drat , gear  , vs,  disp have an increasing effect on mpg. 
+2)  amongst each other am , qsec,drat , gear  , vs,  disp have an heterogenous effect. e.g. increasing qsec, drat & gear  results  positively in increasing vs. 
+
+No surprise: increasing am  results  positively in increasing gear!!!
+
+
+Increasing  drat   results  positively in increasing am with the highest correlation of 0.713.
+
+**Action: **
+It has to be investigated if there are interdepencies.Thus: As mpg increases with the switch to manual transmission it has to be investigated if the variables drat, gear, vs - which are positively correlated to manual transmission - better explain the increase in mileage. 
+
+
+
+##fit multiple models and detail their strategy for model selection
+
+As the stepwise regression have downsides( http://davegiles.blogspot.com/2014/07/step-wise-regression.html) it is used for validation.
+
+### Cluster 2 - explanatory variables impacting increasing mpg
+
+#### Confounding explanatory variables impacting increasing mpg
+
+Thus, this systematic step by step approach is performed : 
+
+```{r, echo=TRUE}
+#mpg,am , qsec,drat , gear  , vs,  disp
+cor_drat_vs <- cor( input_data$vs,input_data$drat)
+cor_gear_drat <- cor( input_data$drat,input_data$gear)
+cor_drat_disp <- cor( input_data$disp,input_data$drat)
+cor_disp_gear <- cor( input_data$disp,input_data$gear)
+cor_vs_gear <- cor( input_data$vs,input_data$gear)
+cor_vs_disp <- cor( input_data$vs,input_data$disp)
+cor_qsec_drat <- cor( input_data$qsec,input_data$drat)
+cor_qsec_gear <- cor( input_data$qsec,input_data$gear)
+cor_qsec_disp <- cor( input_data$qsec,input_data$disp)
+cor_vs_qsec <- cor( input_data$vs,input_data$qsec)
+
+``` 
+
+Result: the shortlist of the increasing mpg parameters now consist of drat, qsec, vs, gear.
+
+
+Next step is to use this short list for building the positive cluster models.
+
+
+```{r, echo=TRUE}
+fit<-lm(mpg~gear+am+ qsec+drat + gear + vs+  disp,data=input_data)
+fit5<-lm(mpg~qsec+drat + gear + vs+  disp,data=input_data)
+fit6<-lm(mpg~qsec+drat +  vs,data=input_data)
+fit1<-lm(mpg~gear+vs,data=input_data)
+fit2<-lm(mpg~gear+vs+drat,data=input_data)
+fit3<-lm(mpg~gear+drat,data=input_data)
+fit4<-lm(mpg~drat+vs,data=input_data)
+summary(fit)$coefficients
+summary(fit1)$coefficients
+summary(fit2)$coefficients
+summary(fit3)$coefficients
+summary(fit4)$coefficients
+summary(fit5)$coefficients
+summary(fit6)$coefficients
+anova(fit,fit1, fit2, fit3, fit4,fit5,fit6)
+
+
+```
+
+Because of confounding impact qsec can be excluded.
+
+
+Result: the shortlist of the increasing mpg parameters now consist of drat,  vs, gear.
+
+#### Interaction of explanatory variables impacting increasing mpg
+
+Now, the interaction of drat,  vs, gear with am has to be assessed
+
+####diagnostic plots on the interaction of drat,  vs, gear with am
+
+```{r, echo=TRUE}
+interaction.plot( tbl_input_data$gear, tbl_input_data$vs,tbl_input_data$mpg, type="b", col=c(1:3), 
+                  leg.bty="o", leg.bg="beige", lwd=2, pch=c(18,24,22), 
+                       xlab="Number of Gears", 
+                       ylab="Mean Miles Per Gallon", 
+                       main="Interaction Plot")
+
+``` 
+There is no obvious interaction between Gears and vs, having vs with the stronger increase impact on mpg
+```{r, echo=TRUE}
+interaction.plot( tbl_input_data$drat, tbl_input_data$vs,tbl_input_data$mpg, type="b", col=c(1:3), 
+                   leg.bty="o", leg.bg="beige", lwd=2, pch=c(18,24,22), 
+                       xlab="drat Rear axle ratio", 
+                       ylab="Mean Miles Per Gallon", main="Interaction Plot")
+``` 
+                       
+                       There is no obvious interaction between Drat and vs.
+```{r, echo=TRUE}                     
+interaction.plot( tbl_input_data$drat, tbl_input_data$gear,tbl_input_data$mpg, type="b", col=c(1:3), 
+                   leg.bty="o", leg.bg="beige", lwd=2, pch=c(18,24,22), 
+                       xlab="drat Rear axle ratio", 
+                       ylab="Mean Miles Per Gallon", main="Interaction Plot")
+
+``` 
+ 
+                       There is some interaction between Drat and gear around 4 drat and 4 gears
+
+```{r, echo=TRUE}
+interaction.plot( tbl_input_data$drat, tbl_input_data$am,tbl_input_data$mpg, type="b", col=c(1:3), 
+                   leg.bty="o", leg.bg="beige", lwd=2, pch=c(18,24,22), 
+                       xlab="drat Rear axle ratio", 
+                       ylab="Mean Miles Per Gallon", 
+                      main="Interaction Plot")
+ 
+```  
+  
+There is  interaction between Drat and am, having drat around 4 and manual transmission with the best increasing impact on mpg  
+```{r, echo=TRUE} 
+ interaction.plot( tbl_input_data$gear, tbl_input_data$am,tbl_input_data$mpg, type="b", col=c(1:3), 
+                   leg.bty="o", leg.bg="beige", lwd=2, pch=c(18,24,22), 
+                       xlab="Number of Gears", 
+                       ylab="Mean Miles Per Gallon", 
+                      main="Interaction Plot")
+
+``` 
+There is  interaction between Gear and am with optimum on 4 Gears, having am with the stronger increase impact on mpg
+```{r, echo=TRUE}
+interaction.plot( tbl_input_data$vs, tbl_input_data$am,tbl_input_data$mpg, type="b", col=c(1:3), 
+                   leg.bty="o", leg.bg="beige", lwd=2, pch=c(18,24,22), 
+                       xlab="VS", 
+                       ylab="Mean Miles Per Gallon", 
+                      main="Interaction Plot")
+
+``` 
+
+There is an interaction between vs and am, having both  increasing impact on mpg with am 
+
+
+Result after the interaction analysis: the shortlist now consists only of am. Because of interaction vs and drat. 
+
+
+ All right, after this analysis of confounding and interaction variables, it's time to perform a focused ANOVA on these variables and try to interpret results using the "aov" function:
+
+
+
+
+```{r, echo=TRUE}
+a<-summary(fm1 <- aov(mpg ~ am + vs+drat+gear, data = input_data))
+``` 
+
+             
+Good, for drat the F value is 1.1, and p-value is not very low too. In other words: Exclude drat and keep vs and am in the list. 
+WHy?
+vs and am show the variation of mpg means among different vs resp. am(numerator) is much larger than the variation of mpg within vs/am type, and our p-value is less than 0.05 (as suggested by normal scientific standard). Hence we can conclude that for our confidence interval we accept the alternative hypothesis H1 that there is a significant relationship between am, vs and mpg.
+
+
+
+
+
+### Cluster 1 - explanatory variables impacting decreasing mpg
+
+Now the variables with decreasing effect have to evaluated if to be included in the model.
+These variables are expected to have a smoothing effect on the increasing impact of manual transmission onto mpg.
+
+### Confounding variables impacting decreasing mpg
+
+```{r, echo=TRUE}
+#mpg,am ,  wt,  carb  ,  cyl   ,hp
+cor_carb_wt <- cor( input_data$wt,input_data$carb)
+cor_cyl_carb <- cor( input_data$carb,input_data$cyl)
+cor_carb_hp <- cor( input_data$hp,input_data$carb)
+cor_hp_cyl <- cor( input_data$hp,input_data$cyl)
+cor_wt_cyl <- cor( input_data$wt,input_data$cyl)
+cor_wt_hp <- cor( input_data$wt,input_data$hp)
+
+
+``` 
+
+Result: So far the correlation analysis did not identify any uneccessary variable.
+
+Next step is to use this result for building the negative cluster models.
+
+
+```{r, echo=TRUE}
+# wt,  carb  ,  cyl   ,hp
+fit<-lm(mpg~hp+ cyl+carb +  wt,data=input_data)
+
+
+summary(fit)$coefficients
+anova(fit)
+
+```
+Basically, the explanatory variable carb is identified to be excluded as confounding . The remaining wt,cyl, hp are having a high F value and low p value.Thus these are to be included in the final model analysis.
+
+
+
+```{r, echo=TRUE}
+
+a<-summary(fm1 <- aov(mpg ~ am + cyl+hp+wt, data = input_data))
+ a
+``` 
+
+Result after the interaction analysis: the shortlist of the decreasing mpg parameters now consist of am  hp, wt, cyl.
+WHy?
+am  and cyl show the variation of mpg means among different am  resp. cyl  (numerator) is much larger than the variation of mpg within cyl/am type, and our p-value is less than 0.05 (as suggested by normal scientific standard). As well for wt and hp our p-value is less than 0.05.Hence we can conclude that for our confidence interval we accept the alternative hypothesis H1 that there is a significant relationship between am, cyl, hp, wt and mpg.
+
+
+
+
+### Build the final model
+
+Approach: Based on the  previous analysis steps the final shortlist is to be compiled with am, cyl,vs,hp, wt to investigate the impact on mpg. It is compared with the control model
+
+``` {r, echo=TRUE}
+#am, cyl,vs, hp,wt
+  
+model_prelim<-lm(mpg~am+vs+cyl+hp+wt,data= tbl_input_data)
+model_con<-lm(mpg~am,data= tbl_input_data)
+summary(model_prelim)$coef
+#layout(matrix(c(1,2,3,4),2,2)) # optional layout 
+#plot(model_prelim) # diagnostic plots
+summary(model_con)$coef
+anova (model_prelim,model_con)
+``` 
+This analysis shows that the original control model is more significant. Therefore: From this preliminary model the mpg increasing variable vs seems to have unrelistic effects und will be not included in the final model.
+``` {r, echo=TRUE}
+#am, cyl, hp,wt
+ model_int<-lm(mpg~am+cyl+hp+wt,data= tbl_input_data)
+model_con<-lm(mpg~am,data= tbl_input_data)
+summary(model_int)$coef
+#layout(matrix(c(1,2,3,4),2,2)) # optional layout 
+#plot(model_int) # diagnostic plots
+#plot(model_con) # diagnostic plots
+summary(model_con)$coef
+anova (model_int,model_con)
+mean(summary (model_int)$residuals)
+model_4 <- step(model_int, direction = "both")
+```
+As the mmultivariate linear regression suggests, we fit a multivariate linear regression for mpg on am, wt, and hp. Since we have two models of the same data, we run an ANOVA to compare the two models and see if they are significantly different.
+
+``` {r, echo=TRUE}
+#am,  hp,wt
+model_fin<-lm(mpg~am+hp+wt,data= tbl_input_data)
+model_con<-lm(mpg~am,data= tbl_input_data)
+summary(model_fin)$coef
+#layout(matrix(c(1,2,3,4),2,2)) # optional layout 
+#plot(model_fin) # diagnostic plots
+#plot(model_con) # diagnostic plots
+summary(model_con)$coef
+mean(summary (model_fin)$residuals)
+anova (model_fin,model_con)
+```
+
+The model output indicates some evidence of a difference in the average growth of mpg with the control model. Therefore we perform a stepwise regression:
+
+```{r, echo=TRUE}
+
+model_2 <- step(model_fin, direction = "forward")
+#Start:  AIC=63.44
+#mpg ~ cyl + hp + wt
+
+anova (model_fin,model_con)
+model_org <- step(model0, direction = "forward")
+#Start:  AIC=103.67
+#mpg ~ am
+model_opt <- step(model1, direction = "forward")
+#Start:  AIC=70.9
+#mpg ~ wt + qsec + am
+```
+
+As the 2 models are very close and depending on the direction of stepwise regression: Next step is to compare the adjusted R-squared of these 2 models
+
+```{r, echo=TRUE}
+summary(model_opt)
+summary(model_2)
+
+adj.r2<-c(summary(model_opt)$adj.r.squared,
+  summary(model_2)$adj.r.squared,
+  summary(model0)$adj.r.squared)
+  
+names(adj.r2)<-c("model_optimal", "model2", "model0" )
+print(adj.r2)
+
+```
+
+###Final result of the analysis
+
+This model_optimal captured 84% of the overall variation in mpg. With a p-value of 3.745e-09,  the null hypothesis is to be rejected and claim that our multivariate model is significantly different from our simple linear regression model.
+
+Before we report the details of our model, it is important to check the residuals for any signs of non-normality and examine the residuals vs. fitted values plot to spot for any signs of heteroskedasticity
+```{r, echo=TRUE}
+layout(matrix(c(1,2,3,4),2,2)) # optional layout 
+ plot(model_fin) # diagnostic plots
+``` 
+The residual diagnostocs show normality and no evidence of heteroskedasticity .
+```{r, echo=TRUE}
+#final model results
+summary(model_opt)
+
+```
+
+
+##Results Summary:
+
+Analysis of Variance (ANOVA) is a commonly used statistical technique for investigating data by comparing the means of subsets of the data. By this means and mutiple regression analysis we built a model which explains 84% of the variance in miles per gallon (mpg). In detail, we consider  that wt and qsec did indeed interfere with  the relationship between am and mpg (to major extend wt). Initial inspection of the data suggests that there are differences in the  two transmission types that significantly explains the mpg performance: manual transmission cars have 2.94 MPGs more than automatic transmission cars. However, this effect is clearly reduced  (2.936  vs. 7.245) when we did not adjust for weight and qsec. 
+
+Final result is that the question of auto transmission car or manual car is not answered and have to be perform adjustments as necessary with  weight and accelaration speed.
+
+ 
+
+#  Apendix
